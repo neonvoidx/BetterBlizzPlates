@@ -94,6 +94,33 @@ local defaultSettings = {
     hideLevelFrame = true,
     druidOverstacks = true,
     personalBarPosition = 0.5,
+    -- PRD context menu & bar text
+    prdContextMenu = false,
+    prdBarTextEnable = false,
+    prdBorderEnable = false,
+    prdBorderSize = 1,
+    prdBorderColorRGB = {0, 0, 0, 1},
+    prdTextHealthEnable = false,
+    prdTextHealthFont = "Yanone (BBP)",
+    prdTextHealthFontSize = 12,
+    prdTextHealthOutline = "OUTLINE",
+    prdTextHealthFormat = "Percent",
+    prdTextHealthXPos = 0,
+    prdTextHealthYPos = 0,
+    prdTextPowerEnable = false,
+    prdTextPowerFont = "Yanone (BBP)",
+    prdTextPowerFontSize = 12,
+    prdTextPowerOutline = "OUTLINE",
+    prdTextPowerFormat = "Value",
+    prdTextPowerXPos = 0,
+    prdTextPowerYPos = 0,
+    prdTextAltEnable = false,
+    prdTextAltFont = "Yanone (BBP)",
+    prdTextAltFontSize = 12,
+    prdTextAltOutline = "OUTLINE",
+    prdTextAltFormat = "Value",
+    prdTextAltXPos = 0,
+    prdTextAltYPos = 0,
     alwaysShowPurgeTexture = true,
     levelFrameFontSize = 12,
     nameplateExtraClickHeight = 0,
@@ -2528,6 +2555,8 @@ function BBP.PersonalBarSettings()
             altBar.bbpMovingPRD = nil
         end
     end
+    -- Refresh PRD text overlays in case bar layout changed.
+    if BBP.RefreshPRDText then BBP.RefreshPRDText() end
 end
 
 --#################################################################################################
@@ -6736,6 +6765,8 @@ function BBP.RefreshAllNameplates()
         AdjustHealthBarHeight(frame)
         --HideFriendlyHealthbar(frame)
     end
+    -- Refresh PRD text overlays when settings update.
+    if BBP.RefreshPRDText then BBP.RefreshPRDText() end
 end
 
 hooksecurefunc(NamePlateUnitFrameMixin, "OnUnitFactionChanged", function(self)

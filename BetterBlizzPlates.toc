@@ -19,6 +19,7 @@ midnight\modules\castbar.lua
 midnight\modules\arenaid.lua
 midnight\modules\execute.lua
 midnight\modules\healthNumbers.lua
+midnight\modules\prdText.lua
 midnight\modules\target.lua
 retail\modules\healer.lua
 midnight\modules\absorb.lua

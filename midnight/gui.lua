@@ -544,8 +544,9 @@ local function CreateFontDropdown(name, parentFrame, defaultText, settingKey, to
     return dropdown, container
 end
 
-local function CreateTextureDropdown(name, parentFrame, labelText, settingKey, toggleFunc, point, dropdownWidth, maxVisibleItems)
+local function CreateTextureDropdown(name, parentFrame, labelText, settingKey, toggleFunc, point, dropdownWidth, maxVisibleItems, mediaType)
     maxVisibleItems = maxVisibleItems or 25  -- Default to 25 visible items if not provided
+    mediaType = mediaType or LSM.MediaType.STATUSBAR
 
     -- Create container for label and dropdown
     local container = CreateFrame("Frame", nil, parentFrame)
@@ -569,7 +570,7 @@ local function CreateTextureDropdown(name, parentFrame, labelText, settingKey, t
 
     -- Fetch and sort textures
     C_Timer.After(1, function()
-        local textures = LSM:HashTable(LSM.MediaType.STATUSBAR)
+        local textures = LSM:HashTable(mediaType)
         local sortedTextures = {}
         for textureName in pairs(textures) do
             table.insert(sortedTextures, textureName)
@@ -1321,6 +1322,15 @@ local function CreateSlider(parent, label, minValue, maxValue, stepValue, elemen
                 elseif element == "customFontSize" then
                     BetterBlizzPlatesDB.customFontSize = value
                     BBP.RefreshAllNameplates()
+                elseif element == "prdBarTextFontSize" then
+                    BetterBlizzPlatesDB.prdBarTextFontSize = value
+                    if BBP.RefreshPRDText then BBP.RefreshPRDText() end
+                elseif string.match(element, "^prdText.+FontSize$") then
+                    BetterBlizzPlatesDB[element] = value
+                    if BBP.RefreshPRDText then BBP.RefreshPRDText() end
+                elseif element == "prdBorderSize" then
+                    BetterBlizzPlatesDB.prdBorderSize = value
+                    if BBP.RefreshPRDText then BBP.RefreshPRDText() end
                 elseif element == "nameplateNonTargetAlpha" then
                     BetterBlizzPlatesDB.nameplateNonTargetAlpha = value
                     BBP.RefreshAllNameplates()
@@ -11510,6 +11520,369 @@ local function guiTotemList()
     end
 end
 
+local function guiPersonalResourceDisplay()
+    --------------------------------
+    -- Personal Resource Display
+    --------------------------------
+    local guiPRD = CreateFrame("Frame")
+    guiPRD.name = "Personal Resource"
+    guiPRD.parent = BetterBlizzPlates.name
+    local guiPRDCategory = Settings.RegisterCanvasLayoutSubcategory(BBP.category, guiPRD, guiPRD.name, guiPRD.name)
+    CreateTitle(guiPRD)
+
+    local bgImg = guiPRD:CreateTexture(nil, "BACKGROUND")
+    bgImg:SetAtlas("professions-recipe-background")
+    bgImg:SetPoint("CENTER", guiPRD, "CENTER", -8, 4)
+    bgImg:SetSize(680, 610)
+    bgImg:SetAlpha(0.4)
+    bgImg:SetVertexColor(0,0,0)
+
+    local scrollFrame = CreateFrame("ScrollFrame", nil, guiPRD, "UIPanelScrollFrameTemplate")
+    scrollFrame:SetSize(700, 612)
+    scrollFrame:SetPoint("CENTER", guiPRD, "CENTER", -20, 3)
+
+    local contentFrame = CreateFrame("Frame", nil, scrollFrame)
+    contentFrame:SetSize(680, 1700)
+    scrollFrame:SetScrollChild(contentFrame)
+
+    local sectionBgBackdrop = {
+        bgFile   = "Interface\\ChatFrame\\ChatFrameBackground",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true, tileSize = 16, edgeSize = 8,
+        insets = { left = 3, right = 3, top = 3, bottom = 3 },
+    }
+
+    local function CreateSectionBg(x, y, w, h)
+        local bg = CreateFrame("Frame", nil, contentFrame, "BackdropTemplate")
+        bg:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", x, y)
+        bg:SetSize(w, h)
+        bg:SetFrameLevel(math.max(contentFrame:GetFrameLevel() - 1, 0))
+        bg:SetBackdrop(sectionBgBackdrop)
+        bg:SetBackdropColor(0.05, 0.05, 0.1, 0.45)
+        bg:SetBackdropBorderColor(0.25, 0.25, 0.4, 0.7)
+    end
+
+    CreateSectionBg(18, 0, 650, 180)
+
+    local prdSettingsText = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    prdSettingsText:SetPoint("LEFT", contentFrame, "TOPLEFT", 28, -5)
+    prdSettingsText:SetText("Personal Resource Bar Display Settings")
+    local prdSettingsIcon = contentFrame:CreateTexture(nil, "ARTWORK")
+    prdSettingsIcon:SetAtlas("UI-HUD-UnitFrame-Player-PortraitOn-Badge")
+    prdSettingsIcon:SetSize(22, 22)
+    prdSettingsIcon:SetPoint("RIGHT", prdSettingsText, "LEFT", -3, 0)
+
+    local nameplateSelfWidth = CreateSlider(contentFrame, "Personal Nameplate Width", 50, 200, 1, "nameplateSelfWidth")
+    nameplateSelfWidth:SetPoint("TOPLEFT", prdSettingsText, "BOTTOMLEFT", 10, -20)
+    local nameplateSelfWidthResetButton = CreateFrame("Button", nil, contentFrame, "UIPanelButtonTemplate")
+    nameplateSelfWidthResetButton:SetText("Default")
+    nameplateSelfWidthResetButton:SetWidth(60)
+    nameplateSelfWidthResetButton:SetPoint("LEFT", nameplateSelfWidth, "RIGHT", 10, 0)
+    nameplateSelfWidthResetButton:SetScript("OnClick", function()
+        BBP.ResetToDefaultWidth(nameplateSelfWidth, false, true)
+    end)
+
+    local hidePersonalBarManaFrame = CreateCheckbox("hidePersonalBarManaFrame", "Hide Personal Manabar", contentFrame, nil, BBP.PersonalBarSettings)
+    hidePersonalBarManaFrame:SetPoint("TOPLEFT", nameplateSelfWidth, "BOTTOMLEFT", -10, -20)
+    CreateTooltipTwo(hidePersonalBarManaFrame, "Hide Personal Manabar", "Hide the manabar on personal resource.")
+
+    local hidePersonalBarExtraFrame = CreateCheckbox("hidePersonalBarExtraFrame", "Hide Extra Personal Bar", contentFrame, nil, BBP.PersonalBarSettings)
+    hidePersonalBarExtraFrame:SetPoint("LEFT", hidePersonalBarManaFrame.text, "RIGHT", 0, 0)
+    CreateTooltipTwo(hidePersonalBarExtraFrame, "Hide Extra Personal Bar", "Hide the extra bar on personal resource for Ebon/Stagger.")
+
+    local hidePersonalManaFX = CreateCheckbox("hidePersonalManaFX", "Hide Personal Resource Manabar FX", contentFrame, nil, BBP.HidePersonalManabarFX)
+    hidePersonalManaFX:SetPoint("TOPLEFT", hidePersonalBarManaFrame, "BOTTOMLEFT", 0, pixelsBetweenBoxes)
+    CreateTooltipTwo(hidePersonalManaFX, "Hide Personal Manabar FX", "Hide the manabar animations on the Personal Resource Display for instant feedback.")
+    hidePersonalManaFX:HookScript("OnClick", function(self)
+        if not self:GetChecked() then
+            StaticPopup_Show("BBP_CONFIRM_RELOAD")
+        end
+    end)
+
+    local personalNpTRP3Color = CreateCheckbox("personalNpTRP3Color", "TRP3: Personal Bar Color", contentFrame)
+    personalNpTRP3Color:SetPoint("TOPLEFT", hidePersonalManaFX, "BOTTOMLEFT", 0, pixelsBetweenBoxes)
+    CreateTooltipTwo(personalNpTRP3Color, "TRP3: Personal Bar Color", "Color the Personal Resource Display healthbar your TRP3 Color.")
+
+    local personalBarTweaks = CreateCheckbox("personalBarTweaks", "Personal Bar Tweaks", contentFrame)
+    personalBarTweaks:SetPoint("TOPLEFT", personalNpTRP3Color, "BOTTOMLEFT", 0, pixelsBetweenBoxes)
+    CreateTooltipTwo(personalBarTweaks, "Personal Bar Tweaks", "Enable to show more features on the Personal Resource Bar\n\nThis will show (if enabled):\nName\nGuild Name\nClassic Border")
+
+    CreateSectionBg(18, -171, 650, 148)
+
+    local prdBorderSectionText = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    prdBorderSectionText:SetPoint("TOPLEFT", personalBarTweaks, "BOTTOMLEFT", 0, -18)
+    prdBorderSectionText:SetText("|cff00c0ffPRD Bar Borders|r")
+
+    -- pre-declare for HookScript closure
+    local prdBorderTextureDD, prdBorderTextureContainer, prdBorderColorBtn
+
+    local prdBorderEnable = CreateCheckbox("prdBorderEnable", "Enable Bar Borders", contentFrame)
+    prdBorderEnable:SetPoint("TOPLEFT", prdBorderSectionText, "BOTTOMLEFT", 0, pixelsBetweenBoxes)
+    CreateTooltipTwo(prdBorderEnable, "PRD Bar Borders", "Add a colored border around each Personal Resource Display bar.")
+
+    local prdBorderSize = CreateSlider(prdBorderEnable, "Border Size", 0.5, 10, 0.5, "prdBorderSize")
+    prdBorderSize:SetPoint("TOPLEFT", prdBorderEnable, "BOTTOMLEFT", 10, -10)
+
+    prdBorderTextureDD, prdBorderTextureContainer = CreateTextureDropdown(
+        "prdBorderTextureDD",
+        contentFrame,
+        "Border Texture",
+        "prdBorderTexture",
+        function() if BBP.RefreshPRDText then BBP.RefreshPRDText() end end,
+        { anchorFrame = prdBorderSize, x = 0, y = -10 },
+        155, 25, LSM.MediaType.BORDER
+    )
+    local prdBorderTexLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    prdBorderTexLabel:SetPoint("BOTTOM", prdBorderTextureDD, "TOP", 0, 3)
+    prdBorderTexLabel:SetText("Border Texture")
+    CreateTooltip(prdBorderTextureDD, "Select a border texture from LibSharedMedia. Default is a solid pixel border.")
+
+    -- Color picker swatch
+    local prdBorderColorLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    prdBorderColorLabel:SetPoint("LEFT", prdBorderTextureContainer, "RIGHT", 20, 10)
+    prdBorderColorLabel:SetText("Border Color")
+
+    prdBorderColorBtn = CreateFrame("Frame", nil, contentFrame)
+    prdBorderColorBtn:SetSize(18, 18)
+    prdBorderColorBtn:SetPoint("TOPLEFT", prdBorderColorLabel, "BOTTOMLEFT", 0, -4)
+
+    local prdBorderSwatch = prdBorderColorBtn:CreateTexture(nil, "OVERLAY")
+    prdBorderSwatch:SetSize(14, 14)
+    prdBorderSwatch:SetPoint("CENTER")
+    local initBorderColor = BetterBlizzPlatesDB.prdBorderColorRGB or {0, 0, 0, 1}
+    prdBorderSwatch:SetColorTexture(initBorderColor[1], initBorderColor[2], initBorderColor[3], initBorderColor[4])
+
+    local swatchBorder = prdBorderColorBtn:CreateTexture(nil, "OVERLAY", nil, 1)
+    swatchBorder:SetAtlas("talents-node-square-gray")
+    swatchBorder:SetAllPoints()
+
+    prdBorderColorBtn:EnableMouse(true)
+    prdBorderColorBtn:SetScript("OnMouseDown", function()
+        if prdBorderColorBtn:GetAlpha() < 1 then return end
+        BetterBlizzPlatesDB.prdBorderColorRGB = BetterBlizzPlatesDB.prdBorderColorRGB or {0, 0, 0, 1}
+        OpenColorOptions(BetterBlizzPlatesDB.prdBorderColorRGB, function()
+            local c = BetterBlizzPlatesDB.prdBorderColorRGB
+            prdBorderSwatch:SetColorTexture(c[1], c[2], c[3], c[4])
+            if BBP.RefreshPRDText then BBP.RefreshPRDText() end
+        end)
+    end)
+
+    prdBorderEnable:HookScript("OnClick", function(self)
+        local on = self:GetChecked()
+        if prdBorderTextureDD then
+            if on then EnableElement(prdBorderTextureDD) else DisableElement(prdBorderTextureDD) end
+        end
+        prdBorderColorBtn:SetAlpha(on and 1 or 0.5)
+        if BBP.RefreshPRDText then BBP.RefreshPRDText() end
+    end)
+
+    if not BetterBlizzPlatesDB.prdBorderEnable then
+        DisableElement(prdBorderTextureDD)
+        prdBorderColorBtn:SetAlpha(0.5)
+    end
+
+    CreateSectionBg(18, -298, 650, 86)
+
+    local prdSectionText = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    prdSectionText:SetPoint("TOPLEFT", prdBorderTextureContainer, "BOTTOMLEFT", 0, -18)
+    prdSectionText:SetText("|cff00c0ffPRD Text & Menu|r")
+
+    local prdContextMenu = CreateCheckbox("prdContextMenu", "PRD Right-Click Menu", contentFrame)
+    prdContextMenu:SetPoint("TOPLEFT", prdSectionText, "BOTTOMLEFT", 0, pixelsBetweenBoxes)
+    CreateTooltipTwo(prdContextMenu, "PRD Right-Click Menu",
+        "Adds a right-click context menu to the Personal Resource Display bars.",
+        "Mirrors the player unit frame menu (inspect, invite, trade, etc).\n\nRequires out-of-combat to take effect.")
+    prdContextMenu:HookScript("OnClick", function()
+        if BBP.RefreshPRDText then BBP.RefreshPRDText() end
+    end)
+
+    local prdBarTextEnable = CreateCheckbox("prdBarTextEnable", "PRD Bar Text", contentFrame)
+    prdBarTextEnable:SetPoint("TOPLEFT", prdContextMenu, "BOTTOMLEFT", 0, pixelsBetweenBoxes)
+    CreateTooltipTwo(prdBarTextEnable, "PRD Bar Text",
+        "Master toggle for text overlays on PRD bars.",
+        "Enable individual bars below. Each bar has its own font, outline, format, and position.")
+    prdBarTextEnable:HookScript("OnClick", function()
+        if BBP.RefreshPRDText then BBP.RefreshPRDText() end
+    end)
+
+    local prdFormatOptions = { "Percent | Value", "Percent", "Value", "Value / Max", "Value | Percent" }
+
+    -- Creates all widgets for one bar text section.
+    -- Returns a table of sub-elements so the master toggle can enable/disable them.
+    local function CreateBarTextSection(dbKey, title, anchorX, anchorY)
+        local db = BetterBlizzPlatesDB
+        local prefix = "prdText" .. dbKey
+
+        CreateSectionBg(anchorX - 6, anchorY + 5, 280, 400)
+
+        -- pre-declare for the OnClick closure
+        local fontDD, fontContainer, outlineDD, formatDD, fontSizeSlider, xSlider, ySlider
+
+        local refreshFunc = function()
+            if BBP.RefreshPRDText then BBP.RefreshPRDText() end
+        end
+
+        -- Section title header
+        local sectionTitle = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        sectionTitle:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", anchorX, anchorY)
+        sectionTitle:SetText("|cff00c0ff" .. title .. "|r")
+
+        -- Texture selector (always enabled, independent of text toggle)
+        local textureDD, textureContainer = CreateTextureDropdown(
+            prefix .. "TextureDD",
+            contentFrame,
+            "Select Texture",
+            prefix .. "Texture",
+            refreshFunc,
+            { anchorFrame = contentFrame, x = anchorX + 20, y = anchorY - 22 }
+        )
+        local texLabel = contentFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        texLabel:SetPoint("BOTTOM", textureDD, "TOP", 0, 3)
+        texLabel:SetText("Bar Texture")
+        CreateTooltip(textureDD, title .. " bar texture")
+
+        -- Text enable checkbox, positioned below the texture container
+        local enableCb = CreateCheckbox(prefix .. "Enable", title .. " Text", contentFrame)
+        enableCb:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", anchorX, anchorY - 77)
+        CreateTooltipTwo(enableCb, title .. " Text", "Show text on the " .. title .. " bar.")
+
+        enableCb:HookScript("OnClick", function(self)
+            local on = self:GetChecked()
+            if fontDD then
+                if on then EnableElement(fontDD) else DisableElement(fontDD) end
+            end
+            if outlineDD then
+                if on then LibDD:UIDropDownMenu_EnableDropDown(outlineDD)
+                else LibDD:UIDropDownMenu_DisableDropDown(outlineDD) end
+            end
+            if formatDD then
+                if on then LibDD:UIDropDownMenu_EnableDropDown(formatDD)
+                else LibDD:UIDropDownMenu_DisableDropDown(formatDD) end
+            end
+            if fontSizeSlider then
+                if on then EnableElement(fontSizeSlider) else DisableElement(fontSizeSlider) end
+            end
+            if xSlider then
+                if on then EnableElement(xSlider) else DisableElement(xSlider) end
+            end
+            if ySlider then
+                if on then EnableElement(ySlider) else DisableElement(ySlider) end
+            end
+            refreshFunc()
+        end)
+
+        fontDD, fontContainer = CreateFontDropdown(
+            prefix .. "FontDD",
+            contentFrame,
+            "Select Font",
+            prefix .. "Font",
+            refreshFunc,
+            { anchorFrame = enableCb, x = 20, y = -3 }
+        )
+
+        outlineDD = CreateAnchorDropdown(
+            prefix .. "OutlineDD",
+            contentFrame,
+            db[prefix .. "Outline"] or "OUTLINE",
+            prefix .. "Outline",
+            refreshFunc,
+            { anchorFrame = fontContainer, x = 0, y = -70, label = "Outline" },
+            135, nil,
+            { "THICKOUTLINE", "OUTLINE", "NONE" }
+        )
+
+        formatDD = CreateAnchorDropdown(
+            prefix .. "FormatDD",
+            contentFrame,
+            db[prefix .. "Format"] or "Percent | Value",
+            prefix .. "Format",
+            refreshFunc,
+            { anchorFrame = outlineDD, x = 0, y = -55, label = "Format" },
+            185, nil,
+            prdFormatOptions
+        )
+
+        fontSizeSlider = CreateSlider(contentFrame, "Font Size", 6, 32, 1, prefix .. "FontSize", nil, 145)
+        fontSizeSlider:SetPoint("TOPLEFT", formatDD, "BOTTOMLEFT", -15, -22)
+
+        xSlider = CreateSlider(contentFrame, "X Offset", -100, 100, 1, prefix, "X", 115)
+        xSlider:SetPoint("TOPLEFT", fontSizeSlider, "BOTTOMLEFT", 0, -12)
+        xSlider:HookScript("OnValueChanged", refreshFunc)
+
+        ySlider = CreateSlider(contentFrame, "Y Offset", -100, 100, 1, prefix, "Y", 115)
+        ySlider:SetPoint("LEFT", xSlider, "RIGHT", 20, 0)
+        ySlider:HookScript("OnValueChanged", refreshFunc)
+
+        if not db[prefix .. "Enable"] then
+            DisableElement(fontDD)
+            LibDD:UIDropDownMenu_DisableDropDown(outlineDD)
+            LibDD:UIDropDownMenu_DisableDropDown(formatDD)
+            DisableElement(fontSizeSlider)
+            DisableElement(xSlider)
+            DisableElement(ySlider)
+        end
+
+        return {
+            enableCb      = enableCb,
+            fontDD        = fontDD,
+            outlineDD     = outlineDD,
+            formatDD      = formatDD,
+            fontSizeSlider = fontSizeSlider,
+            xSlider       = xSlider,
+            ySlider       = ySlider,
+        }
+    end
+
+    -- 2-column layout: Health + Alt on left, Power + Class on right
+    local leftX  = 8
+    local rightX = 335
+    local row1Y  = -405
+    local row2Y  = -825
+
+    local healthSection = CreateBarTextSection("Health", "Health",       leftX,  row1Y)
+    local powerSection  = CreateBarTextSection("Power",  "Power",        rightX, row1Y)
+    local altSection    = CreateBarTextSection("Alt",    "Alt Power",    leftX,  row2Y)
+
+    local allSections = { healthSection, powerSection, altSection }
+
+    -- Master toggle enables/disables all per-bar sections
+    prdBarTextEnable:HookScript("OnClick", function(self)
+        local masterOn = self:GetChecked()
+        for _, section in ipairs(allSections) do
+            if masterOn then
+                section.enableCb:Enable()
+                section.enableCb:SetAlpha(1)
+                local barOn = section.enableCb:GetChecked()
+                if barOn then
+                    EnableElement(section.fontDD)
+                    LibDD:UIDropDownMenu_EnableDropDown(section.outlineDD)
+                    LibDD:UIDropDownMenu_EnableDropDown(section.formatDD)
+                    EnableElement(section.fontSizeSlider)
+                    EnableElement(section.xSlider)
+                    EnableElement(section.ySlider)
+                end
+            else
+                section.enableCb:Disable()
+                section.enableCb:SetAlpha(0.5)
+                DisableElement(section.fontDD)
+                LibDD:UIDropDownMenu_DisableDropDown(section.outlineDD)
+                LibDD:UIDropDownMenu_DisableDropDown(section.formatDD)
+                DisableElement(section.fontSizeSlider)
+                DisableElement(section.xSlider)
+                DisableElement(section.ySlider)
+            end
+        end
+    end)
+
+    -- Initial state: if master is off, disable all section enable checkboxes too
+    if not BetterBlizzPlatesDB.prdBarTextEnable then
+        for _, section in ipairs(allSections) do
+            section.enableCb:Disable()
+            section.enableCb:SetAlpha(0.5)
+        end
+    end
+end
+
 local function guiMisc()
     local guiMisc = CreateFrame("Frame")
     guiMisc.name = "Misc"--"|A:GarrMission_CurrencyIcon-Material:19:19|a Misc"
@@ -11703,17 +12076,6 @@ local function guiMisc()
     -- nameplateResourceText:SetPoint("TOPLEFT", guiMisc, "TOPLEFT", 45, -250)
     -- nameplateResourceText:SetText("Nameplate Resource")
 
-    local nameplateSelfWidth = CreateSlider(guiMisc, "Personal Nameplate Width", 50, 200, 1, "nameplateSelfWidth")
-    nameplateSelfWidth:SetPoint("TOPLEFT", showLastNameNpc, "BOTTOMLEFT", 10, -20)
-
-    local hidePersonalBarManaFrame = CreateCheckbox("hidePersonalBarManaFrame", "Hide Personal Manabar", guiMisc, nil, BBP.PersonalBarSettings)
-    hidePersonalBarManaFrame:SetPoint("TOPLEFT", showLastNameNpc, "BOTTOMLEFT", 0, -100)
-    CreateTooltipTwo(hidePersonalBarManaFrame, "Hide Personal Manabar", "Hide the manabar on personal resource.")
-
-    local hidePersonalBarExtraFrame = CreateCheckbox("hidePersonalBarExtraFrame", "Hide Extra Personal Bar", guiMisc, nil, BBP.PersonalBarSettings)
-    hidePersonalBarExtraFrame:SetPoint("LEFT", hidePersonalBarManaFrame.text, "RIGHT", 0, 0)
-    CreateTooltipTwo(hidePersonalBarExtraFrame, "Hide Extra Personal Bar", "Hide the extra bar on personal resource for Ebon/Stagger.")
-
     local changeHealthbarHeight = CreateCheckbox("changeHealthbarHeight", "Separate Friendly/Enemy Nameplate Height", guiMisc)
     changeHealthbarHeight:SetPoint("TOPLEFT", showLastNameNpc, "BOTTOMLEFT", 0, -122)
     CreateTooltipTwo(changeHealthbarHeight, "Separate Nameplate Heights", "Change the height of nameplates individually depending if enemy, friendly or personal.")
@@ -11783,15 +12145,6 @@ local function guiMisc()
         end
     end)
 
-
-    local hidePersonalManaFX = CreateCheckbox("hidePersonalManaFX", "Hide Personal Resource Manabar FX", guiMisc, nil, BBP.HidePersonalManabarFX)
-    hidePersonalManaFX:SetPoint("BOTTOMLEFT", changeNameplateBorderSize, "BOTTOMLEFT", 0, 20)
-    CreateTooltipTwo(hidePersonalManaFX, "Hide Personal Manabar FX", "Hide the manabar animations on the Personal Resource Display for instant feedback.")
-    hidePersonalManaFX:HookScript("OnClick", function(self)
-        if not self:GetChecked() then
-            StaticPopup_Show("BBP_CONFIRM_RELOAD")
-        end
-    end)
 
     local changeNameplateBorderColor = CreateCheckbox("changeNameplateBorderColor", "Change Nameplate Border Color", guiMisc)
     changeNameplateBorderColor:SetPoint("TOPLEFT", nameplatePersonalBorderSize, "BOTTOMLEFT", -10, -2)
@@ -11927,25 +12280,6 @@ local function guiMisc()
 
     local nameplateExtraClickWidth = CreateSlider(guiMisc, "Nameplate Extra Clickable Width", -60, 60, 1, "nameplateExtraClickWidth", "X")
     nameplateExtraClickWidth:SetPoint("TOPLEFT", nameplateExtraClickHeight, "BOTTOMLEFT", 0, -16)
-
-    local personalNpTRP3Color = CreateCheckbox("personalNpTRP3Color", "TRP3: Personal Bar Color", guiMisc)
-    personalNpTRP3Color:SetPoint("TOPLEFT", enableNpVerticalPos, "BOTTOMLEFT", -160, -90)
-    CreateTooltipTwo(personalNpTRP3Color, "TRP3: Personal Bar Color", "Color the Personal Resource Display healthbar your TRP3 Color.")
-
-    local personalBarTweaks = CreateCheckbox("personalBarTweaks", "Personal Bar Tweaks", guiMisc)
-    personalBarTweaks:SetPoint("TOPLEFT", personalNpTRP3Color, "BOTTOMLEFT", 0, 6)
-    CreateTooltipTwo(personalBarTweaks, "Personal Bar Tweaks", "Enable to show more features on the Personal Resource Bar\n\nThis will show (if enabled):\nName\nGuild Name\nClassic Border")
-
-
-
-
-    local nameplateSelfWidthResetButton = CreateFrame("Button", nil, guiMisc, "UIPanelButtonTemplate")
-    nameplateSelfWidthResetButton:SetText("Default")
-    nameplateSelfWidthResetButton:SetWidth(60)
-    nameplateSelfWidthResetButton:SetPoint("LEFT", nameplateSelfWidth, "RIGHT", 10, 0)
-    nameplateSelfWidthResetButton:SetScript("OnClick", function()
-        BBP.ResetToDefaultWidth(nameplateSelfWidth, false, true)
-    end)
 end
 
 local function guiImportAndExport()
@@ -12537,6 +12871,7 @@ function BBP.LoadGUI()
 
     guiGeneralTab()
     guiTemp()
+    guiPersonalResourceDisplay()
     guiPositionAndScale()
     guiCastbar()
     --guiHideCastbar()
